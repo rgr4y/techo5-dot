@@ -185,6 +185,36 @@ else
 	say "no Wi-Fi firmware: no Wi-Fi"
 fi
 
+# --- Audio tuning. The published rootfs ships no audio-algorithms: without them echod's speaker
+# path runs flat and thin — no EQ, no bass, no beamformer coefficients — and the unit sounds like
+# a tin can. The tuning is Amazon's, so like the Wi-Fi firmware it is never in a published rootfs
+# and every unit takes it from itself: adopted once from Android's system partition into the store,
+# shared by both slots, so it survives a rootfs update. Prefer p13 (the OTA-fixed tuning) over p14
+# (the 2021 tuning) when both are present. Nothing on the unit is replaced if the store already has it.
+AA=$S/audio-algorithms
+[ -d $S ] || AA=/etc/audio-algorithms.slot
+if [ ! -e $AA/EQ_50.cfg ]; then
+	$BB mkdir -p $AA
+	for part in /dev/mmcblk0p13 /dev/mmcblk0p14; do
+		$BB mount -t ext4 -o ro,noatime $part /android 2>/dev/null || continue
+		if [ -d /android/system/vendor/etc/audio-algorithms ]; then
+			$BB cp /android/system/vendor/etc/audio-algorithms/* $AA/ 2>/dev/null
+			$BB umount /android
+			say "audio tuning adopted from ${part##*/} into $AA: $($BB ls $AA | $BB wc -l) files"
+			break
+		fi
+		$BB umount /android
+	done
+	$BB sync
+fi
+if [ -e $AA/EQ_50.cfg ]; then
+	$BB mkdir -p /system/vendor/etc
+	$BB ln -sfn $AA /system/vendor/etc/audio-algorithms
+	say "audio tuning at /system/vendor/etc/audio-algorithms: $($BB ls $AA | $BB wc -l) files"
+else
+	say "no audio tuning found to adopt: sound will be flat"
+fi
+
 # --- The network: the one set with wifi-set, or the one Fire OS saved (usr/local/sbin/techo5-net).
 IP=$(/usr/local/sbin/techo5-net)
 say "address ${IP:-none}"

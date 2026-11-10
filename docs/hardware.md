@@ -34,7 +34,7 @@ Sources, short names used below:
 | LED ring | ISSI **IS31FL3236** at I²C 0 `0x3f`, 36 PWM channels = 12 RGB segments; sysfs `frame`, `boot_animation`. DT also lists 4× LP55231 (other board revisions?) | boot.img DT, EchoLocal `led` |
 | Light sensor | tsl2584tsv (`0x29`, IIO) or tsl2540 (`0x39`); units vary | boot.img DT |
 | Buttons | evdev codes 113 mute, 114 vol−, 115 vol+, 138 action; gpio-keys vol± on GPIO 50/37, `mtk-kpd`, ACCDET jack | EchoLocal `codes_dot.go`, DT |
-| Mute | `amz_privacy` under `/sys/devices/soc/10010000.keypad/`, MTK pin 87; Fire OS 5 leaves the lines unclaimed (sysfs GPIO) and Fire OS 6 binds them to the keypad driver | EchoLocal `privacy` |
+| Mute | `amz_privacy` under `/sys/devices/soc/10010000.keypad/`, MTK pin 87; Fire OS 5 leaves the lines unclaimed (sysfs GPIO) and Fire OS 6 binds them to the keypad driver. Don't read its `power_button_state`: the driver has no GPIO behind it, and reading it crashes the kernel (the watchdog reboots the Dot) | EchoLocal `privacy` |
 | Headphone jack | `/sys/class/switch/h2w/state` | EchoLocal `speaker` |
 | PMIC | MT6323 | boot.img DT |
 | Display | none | — |
@@ -194,6 +194,12 @@ Mixer (EchoLocal `gain.go`, `paths_dot.go`):
 - Speaker path: `HPL/HPR Output Mixer L/R_DAC Switch`, `Audio_DacMux_Setting`,
   `Right Channel Only`, `HP Driver Gain Volume` (6 speaker / 11 headphone), a 7-block
   `biquad coefficients` EQ blob (the vendor's speaker tuning), `Ext_Speaker_Amp_Switch`.
+- `HP Driver Gain Volume` runs 0 to 35, -6 to +29 dB at 1 dB a step, and feeds the speaker amp: 6 is
+  0 dB. TECHO5's **Speaker gain** setting (Home Assistant's Playback configuration and the setup page)
+  raises the speaker path's 6 by 0 to +6 dB; off (0 dB) by default, and the jack's 11 is never
+  changed. +3 to +6 dB is louder; high settings can distort and make the wake word over music
+  harder. The register finding is echo-dot-assist's (Gamer92000), whose users run +6 to +7 dB clean;
+  `Ext_Amp_Gain` does nothing. The Echo 2nd gen uses the same control and the same 6.
 - Playback ring 1024 × 4. Unlike cronos, the Dot's DL1 SRAM ring **works** (no hold node needed).
 - Vendor volume curves (31 steps, dB per step) for speaker and headphone are in `paths_dot.go`.
 

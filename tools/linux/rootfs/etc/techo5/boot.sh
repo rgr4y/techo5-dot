@@ -24,15 +24,25 @@ exec > /dev/kmsg 2>&1
 $BB mount -o remount,rw / 2>/dev/null
 
 $BB mount -t proc proc /proc 2>/dev/null
+# Another user's processes, and their command lines, are root's to see: the services that drop root
+# (avahi, the AirPlay and Spotify Connect receivers) see only their own. As on TECHO5's images.
+$BB mount -o remount,hidepid=2 /proc 2>/dev/null
 $BB mount -t sysfs sysfs /sys 2>/dev/null
 $BB mount -t tmpfs -o mode=0755 tmpfs /dev 2>/dev/null
-$BB mkdir -p /dev/pts /tmp /data /android /store
+$BB mkdir -p /dev/pts /dev/shm /tmp /data /android /store
 $BB mount -t devpts devpts /dev/pts 2>/dev/null
+# POSIX shared memory, where nqptp keeps the clock AirPlay 2's receiver reads (feature/streaming).
+$BB mount -t tmpfs -o mode=1777,size=1m tmpfs /dev/shm 2>/dev/null
 # The initramfs wrote which slot this is into /run before switching; a tmpfs over /run would hide it,
 # so it is read first and put back after.
 SLOT=$($BB cat /run/techo5/slot 2>/dev/null)
 $BB mount -t tmpfs tmpfs /run 2>/dev/null
 $BB mount -t tmpfs tmpfs /tmp 2>/dev/null
+# Logs that matter go to userdata (/data/techo5-linux); what services write to /var/log and /var/tmp
+# lives in RAM rather than wearing the slot's flash.
+$BB mount -t tmpfs -o mode=0755 tmpfs /var/log 2>/dev/null
+$BB mount -t tmpfs tmpfs /var/tmp 2>/dev/null
+[ -s /etc/hostname ] && $BB hostname -F /etc/hostname
 # After /run is mounted, not before: a directory made first is hidden by the tmpfs, and then the
 # marker the daemon waits for can never be written. The first slot boot waited on it for ever.
 $BB mkdir -p /run/techo5
@@ -55,6 +65,13 @@ echo 7 4 1 7 > /proc/sys/kernel/printk
 say() { echo "techo5-dot boot: $*"; }
 say "slot $($BB cat /run/techo5/slot 2>/dev/null) release $($BB cat /etc/techo5-release 2>/dev/null)"
 
+# The same image runs on the Echo 2nd gen (radar), a biscuit with a bigger speaker. Amazon's device type
+# id tells them apart; the idme driver ends it with a NUL, and Linux 6.1 (LibreEcho's) has it in the
+# device tree instead. Anything else is taken for a biscuit.
+BOARD=biscuit
+[ "$($BB cat /proc/idme/device_type_id /proc/device-tree/idme/device_type_id/value 2>/dev/null | $BB tr -d '\000\n')" = A7WXQPH584YP ] && BOARD=radar
+say "board $BOARD"
+
 # The bootloader message is the initramfs's to manage, and it has already asked for the next boot to
 # be Linux too (tools/linux/init). This script used to clear it, which silently undid that: a power
 # cut then came back in Android.
@@ -70,7 +87,56 @@ say "userdata $([ -d /data/techo5-linux ] && echo mounted || echo unavailable)"
 # The daemon's state (the Home Assistant key and token, SSH keys) and the logs are root's alone.
 # EchoLocal's install left the state directory writable by everyone.
 $BB chmod 700 /data/techo5-linux 2>/dev/null
+# The installer makes it; made here too, so a unit without one still finds the zone files below.
+[ -d /data/techo5-linux ] && $BB mkdir -p /data/misc/echolocal
 [ -d /data/misc/echolocal ] && $BB chmod 700 /data/misc/echolocal
+# The clock's zone is the unit's, not the image's: /etc/localtime and /etc/timezone link (mkrootfs.py)
+# to the files echod writes there from Home Assistant or the setup page (feature/timezone). A unit
+# that has none yet starts on UTC.
+if [ -d /data/misc/echolocal ] && { [ ! -e /data/misc/echolocal/timezone ] || [ ! -e /data/misc/echolocal/localtime ]; }; then
+	$BB ln -sfn /usr/share/zoneinfo/UTC /data/misc/echolocal/localtime
+	# Removed first: written through, a link left there would put the write somewhere else. A zone
+	# chosen on the device that is gone is forgotten too, so Home Assistant's applies again.
+	$BB rm -f /data/misc/echolocal/timezone /data/misc/echolocal/timezone-set-here
+	echo UTC > /data/misc/echolocal/timezone
+fi
+# Why this boot happened, for Last boot reason (echod's diagnostics), as on TECHO5's images: a restart
+# on purpose leaves its reason in restart-reason (shutdown.sh for any reboot through init, the daemon
+# for its own, and the trial's reboot below); a kernel that panicked leaves a dmesg record in pstore;
+# anything else is what the bootloader says. MediaTek's bootloader calls a restart on purpose a
+# watchdog reset (it goes through the watchdog), which is why the mark is read first.
+t5_boot_reason() {
+	r=$($BB cat /data/techo5-linux/restart-reason 2>/dev/null)
+	$BB rm -f /data/techo5-linux/restart-reason
+	case "$r" in update | restart | recovery)
+		echo "$r"
+		return
+		;;
+	esac
+	if $BB ls /sys/fs/pstore/dmesg-* >/dev/null 2>&1; then
+		echo panic
+		return
+	fi
+	case " $($BB cat /proc/cmdline) " in
+	*" androidboot.bootreason=kernel_panic "* | *" boot_reason=8 "*) echo panic ;;
+	*" androidboot.bootreason=wdt"* | *" boot_reason=3 "* | *" boot_reason=4 "* | *" boot_reason=9 "* | *" boot_reason=10 "*) echo watchdog ;;
+	*" androidboot.bootreason=power_key "* | *" androidboot.bootreason=usb "* | *" boot_reason=0 "* | *" boot_reason=1 "*) echo power ;;
+	*) echo unknown ;;
+	esac
+}
+$BB mount -t pstore pstore /sys/fs/pstore 2>/dev/null
+t5_boot_reason > /run/techo5/boot-reason
+# The kernel keeps its last words in RAM across a restart (pstore), where it has it. Mounting it
+# makes them readable, and a copy on userdata outlives the next boot; a power cut clears the RAM, so
+# this only catches a device that restarted itself.
+if [ -d /data/techo5-linux ] && { $BB mount -t pstore pstore /sys/fs/pstore 2>/dev/null || [ -d /sys/fs/pstore ]; }; then
+	for f in /sys/fs/pstore/*; do
+		[ -e "$f" ] || continue
+		$BB mkdir -p /data/techo5-linux/crash
+		$BB cp "$f" "/data/techo5-linux/crash/$($BB date +%Y%m%d-%H%M%S)-${f##*/}" 2>/dev/null &&
+			say "kernel crash record kept: ${f##*/}" && $BB rm -f "$f"
+	done
+fi
 # The wake word models the image carries, any this unit does not have yet: the installer copied
 # a set once, and a model added to the image since reaches the unit at its next update, so every
 # unit offers the same words. Nothing on the unit is replaced or removed.
@@ -84,6 +150,10 @@ if [ -d /usr/share/techo5/models ] && [ -d /data/misc/echolocal ]; then
 	[ $n -gt 0 ] && say "wake word models: $n files added from the image"
 fi
 
+# --- The loopback, which nothing else brings up: AirPlay 2's receiver and nqptp talk over it (localhost:9000).
+# Without it the daemon keeps the classic AirPlay receiver (feature/streaming).
+$BB ip link set lo up 2>/dev/null
+
 # --- Inbound closed except what the Dot serves, before any network exists (usr/local/sbin/techo5-firewall).
 /usr/local/sbin/techo5-firewall 2>&1 | while read -r l; do say "$l"; done
 
@@ -95,7 +165,7 @@ if [ -d $g ]; then
 	echo 18d1 > $g/idVendor 2>/dev/null
 	echo 4ee7 > $g/idProduct 2>/dev/null
 	echo "TECHO5" > $g/iManufacturer 2>/dev/null
-	echo "Echo Dot 2 Linux" > $g/iProduct 2>/dev/null
+	if [ $BOARD = radar ]; then echo "Echo 2 Linux"; else echo "Echo Dot 2 Linux"; fi > $g/iProduct 2>/dev/null
 	# The unit's own serial, so the PC tells Dots apart: the installer finds this unit's COM port by it.
 	sn=$($BB sed -n 's/.*androidboot.serialno=\([^ ]*\).*/\1/p' /proc/cmdline)
 	[ -n "$sn" ] && echo "$sn" > $g/iSerial 2>/dev/null
@@ -129,6 +199,31 @@ adopt_audio() {
 	$BB sync
 }
 
+# --- The codec paths Fire OS sets for each output, /system/etc/audio_device.xml. The Echo 2nd gen's
+# speaker EQ (the biquad coefficients of its ext_speaker_output path) is in it, and without them its
+# speaker is silent; echod reads them from the store. Amazon's too, so adopted the same way, once. It is
+# checked by its own presence, not MBCL.cfg's: a unit that adopted the coefficients above before this
+# existed has those and not this. A biscuit takes its copy as well; nothing there needs it.
+adopt_audio_device() {
+	[ -d $S ] || return 0
+	{ [ -e $S/audio_device.xml ] || [ -e $S/audio_device.xml.missing ]; } && return 0
+	if $BB mount -t ext4 -o ro,noatime $SYSTEM /android 2>/dev/null; then
+		if $BB cp /android/system/etc/audio_device.xml $S/audio_device.xml.new 2>/dev/null; then
+			$BB mv $S/audio_device.xml.new $S/audio_device.xml
+			say "audio_device.xml adopted from the system partition"
+		else
+			# Not looked for again on every boot: the system partition is not mounted for nothing.
+			$BB rm -f $S/audio_device.xml.new
+			: > $S/audio_device.xml.missing
+			say "no audio_device.xml on the system partition"
+		fi
+		$BB umount /android
+		$BB sync
+	else
+		say "no system partition to adopt audio_device.xml from"
+	fi
+}
+
 # --- Wi-Fi firmware. The unit's own, adopted once into the store and shared by both slots, so a slot
 # that arrives by update needs nothing from Android. It is Amazon's, so it is never in a published
 # rootfs — every unit takes it from itself: from a slot that adopted it before the store kept it, or
@@ -151,9 +246,15 @@ if [ ! -e $FW/WIFI_RAM_CODE_8163 ]; then
 	fi
 	$BB sync
 fi
+adopt_audio_device
 if [ -e $FW/WIFI_RAM_CODE_8163 ]; then
 	[ -L /etc/firmware ] || $BB rm -rf /etc/firmware
 	$BB ln -sfn $FW /etc/firmware
+	# The Linux 6.1 kernel's connectivity driver (the Echo 2nd gen's, from LibreEcho) reads WMT_SOC.cfg and
+	# the Wi-Fi image from /lib/firmware: without them its /dev/stpwmt refuses wmtup's first open with
+	# EPERM. Links to the unit's copy, beside whatever else the slot keeps there; harmless on 3.18.
+	$BB mkdir -p /lib/firmware
+	for f in $FW/*; do [ -e /lib/firmware/${f##*/} ] || $BB ln -s $f /lib/firmware/; done
 	# The driver's module init reads WMT_SOC.cfg from a path compiled into the kernel,
 	# /system/vendor/firmware/, whatever anyone tells it. Missing, wmt_lib_init fails and the kernel's
 	# own cleanup of that failure dereferences NULL — a panic and a watchdog reset, which is how this
@@ -250,14 +351,29 @@ if [ -d /data/techo5-linux ]; then
 	fi
 fi
 
-# The clock starts in 1970 and the daemon's TLS and logs both care. pool.ntp.org by name, now that DHCP
-# has written a resolver, with the gateway as a second source for networks that serve time locally.
-# Bounded, and in the background, so an unreachable server never holds the boot. Then the RTC, so the
-# next boot starts closer.
+# The clock starts in 1970 and the daemon's TLS and logs both care. Several servers by name, now that DHCP
+# has written a resolver, with the gateway as one more for networks that serve time locally: busybox ntpd
+# takes one address for each name, so pool.ntp.org alone is one pool member, and one that never answers
+# left the clock unset (techo5#77). Bounded, and in the background, so an unreachable server never holds
+# the boot; tried again each minute for half an hour if none answers. Then the RTC, in UTC, which is how
+# the kernel reads it at boot, so the next boot starts closer. After that ntpd keeps running, as on
+# TECHO5's images, so a Dot that stays up for months stays on time, and one whose first half hour had
+# no time server gets its clock when one answers.
 gw=$($BB route -n 2>/dev/null | $BB awk '$1 == "0.0.0.0" { print $2; exit }')
-( $BB timeout -s KILL 40 $BB ntpd -n -q -p pool.ntp.org ${gw:+-p "$gw"} > /tmp/ntpd.log 2>&1 &&
-	$BB hwclock -w 2>/dev/null
-	echo "techo5-dot boot: clock $($BB date)" > /dev/kmsg ) &
+# The home's own time server, set on the setup page (echod feature/timezone), is asked first.
+own=$($BB head -n 1 /data/misc/echolocal/ntp-server 2>/dev/null | $BB tr -cd 'A-Za-z0-9.:-')
+( n=0
+	until $BB timeout -s KILL 40 $BB ntpd -n -q ${own:+-p "$own"} -p time.cloudflare.com -p time.google.com -p 0.pool.ntp.org -p 1.pool.ntp.org ${gw:+-p "$gw"} > /tmp/ntpd.log 2>&1; do
+		n=$((n + 1))
+		[ $n -ge 30 ] && { echo "techo5-dot boot: clock not set yet, no time server answered; ntpd keeps trying" > /dev/kmsg; break; }
+		$BB sleep 60
+	done
+	if [ $n -lt 30 ]; then
+		$BB hwclock -w -u 2>/dev/null
+		: > /run/techo5/ntp-set # echod: NTP has the clock, Home Assistant's time leaves it alone
+		echo "techo5-dot boot: clock $($BB date)" > /dev/kmsg
+	fi
+	exec $BB ntpd -n -S /etc/techo5/ntp-event.sh ${own:+-p "$own"} -p time.cloudflare.com -p time.google.com -p 0.pool.ntp.org -p 1.pool.ntp.org ${gw:+-p "$gw"} > /dev/null 2>&1 ) &
 
 # --- The services' own users, which their packages' install scripts would have made. Before the system
 # bus starts, whoever starts it (techo5-bt, or the daemon for AirPlay and Spotify Connect): a bus policy
@@ -312,6 +428,7 @@ say "ready at $($BB date)"
 		case "$($BB cat $S/slots/$SLOT.state 2>/dev/null)" in
 		trial*)
 			echo "techo5-dot boot: slot $SLOT on trial never became healthy; rebooting to spend a try" > /dev/kmsg
+			echo recovery > /data/techo5-linux/restart-reason 2>/dev/null
 			$BB sync
 			$BB reboot
 			;;

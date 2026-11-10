@@ -62,6 +62,17 @@ crumb() {
 	printf 'TECHO5-DOT %02d %s\n' "$CRUMB" "$*" | $BB dd of=$MISC bs=512 seek=$((16 + CRUMB)) count=1 conv=notrunc,sync 2>/dev/null
 }
 
+# --- The bootloader message that brings the next boot here (see "Linux is the boot" below), first
+# thing: a power cut in the moments before it is written back would leave it empty, and the next
+# power-on would boot Fire OS (#37). Written only when it isn't there already, so a power cut can't
+# catch a write to it on an ordinary boot; the breadcrumb says which it was.
+msg=$($BB dd if=$MISC bs=32 count=1 2>/dev/null | $BB tr -cd 'a-z-')
+if [ "$msg" != boot-recovery ]; then
+	printf 'boot-recovery' | $BB dd of=$MISC bs=32 count=1 conv=notrunc,sync 2>/dev/null
+	$BB sync
+fi
+
+crumb "bootloader message at boot: ${msg:-empty}"
 crumb "init started: $($BB uname -r) $($BB uname -m), $($BB grep MemTotal /proc/meminfo)"
 crumb "cmdline: $($BB head -c 200 /proc/cmdline)"
 crumb "dev populated: $($BB ls /dev | $BB wc -l) nodes"
@@ -128,7 +139,6 @@ echo "boot count cleared; rebooting to try the slots again"
 EOF
 chmod 755 /sbin/techo5-retry
 printf 'TECHO5-TRIES %d\n' $tries | $BB dd of=$MISC bs=512 seek=$TRIES_BLOCK count=1 conv=notrunc,sync 2>/dev/null
-printf 'boot-recovery' | $BB dd of=$MISC bs=32 count=1 conv=notrunc,sync 2>/dev/null
 $BB sync
 crumb "boot try $tries of $TRIES_MAX; the next boot is Linux too"
 
@@ -230,8 +240,14 @@ usb_console() {
 	echo 18d1 > $g/idVendor 2>/dev/null
 	echo 4ee7 > $g/idProduct 2>/dev/null
 	echo "TECHO5" > $g/iManufacturer 2>/dev/null
-	echo "Echo Dot 2 Linux" > $g/iProduct 2>/dev/null
-	# The unit's own serial (there is no /proc/idme on this kernel), so the PC tells Dots apart.
+	# The Echo 2nd gen (radar) boots this image too; Amazon's device type id says which, NUL-terminated.
+	# Linux 6.1 (LibreEcho's) has it in the device tree instead of /proc/idme. Neither: a biscuit's.
+	if [ "$($BB cat /proc/idme/device_type_id /proc/device-tree/idme/device_type_id/value 2>/dev/null | $BB tr -d '\000\n')" = A7WXQPH584YP ]; then
+		echo "Echo 2 Linux"
+	else
+		echo "Echo Dot 2 Linux"
+	fi > $g/iProduct 2>/dev/null
+	# The unit's own serial, from the bootloader's command line, so the PC tells Dots apart.
 	local sn=$($BB sed -n 's/.*androidboot.serialno=\([^ ]*\).*/\1/p' /proc/cmdline)
 	[ -n "$sn" ] && echo "$sn" > $g/iSerial 2>/dev/null
 
@@ -300,6 +316,10 @@ wifi() {
 	$BB ln -sfn $fw /system/vendor/firmware
 	$BB ln -sfn /system/vendor /vendor
 	$BB ln -sfn $fw /etc/firmware
+	# The Linux 6.1 kernel's connectivity driver (the Echo 2nd gen's, from LibreEcho) reads WMT_SOC.cfg
+	# and the Wi-Fi image from /lib/firmware instead, and fails the first open of /dev/stpwmt without it.
+	$BB mkdir -p /lib/firmware
+	for f in $fw/*; do [ -e /lib/firmware/${f##*/} ] || $BB ln -s $f /lib/firmware/; done
 	crumb "firmware from $fw: $($BB ls $fw 2>/dev/null | $BB wc -l) files"
 
 	if [ -x /usr/local/bin/wmtup ]; then

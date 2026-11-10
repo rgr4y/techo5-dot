@@ -2,6 +2,10 @@
   <img src="https://raw.githubusercontent.com/HuskerMinion/techo5/main/logo/TECHO5_logo.png" alt="TECHO5" width="200">
 </p>
 
+<p align="center">
+  <img src="images/biscuit.png" alt="BISCUIT" width="120">&nbsp;&nbsp;<img src="images/radar.png" alt="RADAR" width="120">&nbsp;&nbsp;<img src="images/donut.png" alt="DONUT" width="120">
+</p>
+
 <h1 align="center">TECHO5 Dot</h1>
 
 <h3 align="center">The 2016 Echo Dot, minus Amazon's cloud. Linux inside, Home Assistant in charge.</h3>
@@ -20,14 +24,19 @@
   <a href="#what-happened-to-the-dot">What changed</a> ·
   <a href="#stock-echo-dot-2-vs-techo5-dot">Stock vs TECHO5 Dot</a> ·
   <a href="#installing">Install</a> ·
+  <a href="#echo-2nd-gen">Echo 2nd gen</a> ·
+  <a href="#echo-dot-3rd-gen">Echo Dot 3rd gen</a> ·
+  <a href="#echo-input">Echo Input</a> ·
   <a href="#credits">Credits</a> ·
   <a href="https://github.com/HuskerMinion/techo5">TECHO5 for the Echo Show 5</a>
 </p>
 
 ---
 
-TECHO5 Dot replaces Fire OS on the Amazon Echo Dot 2nd generation (codename `biscuit`) with a small
-Alpine Linux image and one daemon. The Dot becomes a Home Assistant voice satellite: it hears the
+TECHO5 Dot replaces Fire OS on the Amazon Echo Dot 2nd generation (codename `biscuit`), the Echo
+2nd generation (2017, codename `radar`) and the Echo Dot 3rd generation (2018, codename `donut`) with a
+small Alpine Linux image and one daemon. The Echo Input (2018, codename `cupcake`) is supported
+experimentally, on the Echo Dot 3rd gen's image. The Dot becomes a Home Assistant voice satellite: it hears the
 wake word on the device, talks to Home Assistant over its encrypted native API, and sends nothing to
 Amazon. It still uses the internet for what you'd expect: checking this repo for signed updates and
 setting its clock.
@@ -39,7 +48,8 @@ setting its clock.
 | 🎙️ **All seven microphones** | Averaged, with echo cancellation, and a wake word heard on the device. |
 | 🔊 **A Bluetooth speaker again** | Pair a phone, or send the Dot's audio to a speaker; a Home Assistant Bluetooth proxy on top. |
 | 📞 **A speakerphone again** | Calls through your own SIP provider, placed by voice or from Home Assistant, answered with the action button; a help call that alerts your phones and dials people in turn. |
-| 🔐 **Locked down** | A firewall that lets in only Home Assistant, mDNS, SSH, Sendspin, the setup page, and on Wi-Fi AirPlay and Spotify Connect while they are on; SSH is keys-only and starts off, and the setup page answers only while it is open. |
+| 🔐 **Locked down** | A firewall that blocks inbound traffic except what the Dot serves (Home Assistant, mDNS, SSH, Sendspin, the setup page, DHCP, ping and DLNA discovery), plus AirPlay and Spotify Connect on Wi-Fi while they are on; SSH is keys-only and starts off, and the setup page answers only while it is open. |
+| 🎤 **Record takes of a word** | For training a wake word: a switch under Privacy & Security in Home Assistant, off by default. With it on, the setup page can ask for a recording and the action button starts it. See [TECHO5's training guide](https://github.com/HuskerMinion/techo5/blob/main/docs/training-wake-word.md). |
 | 🔄 **Signed updates with rollback** | ed25519-signed releases install into a spare slot and roll back on their own if they don't come up healthy. |
 
 **Built on [EchoLocal](https://github.com/ygelfand/echolocal)** by Yuri Gelfand (MIT), which first
@@ -54,7 +64,9 @@ Echo Show 5. Both run the same daemon source, built per device.
 
 > **Status: in daily use on three units.** Everything marked ✅ below was verified on a bench Dot
 > that came from Fire OS 6574.1, and the installer and updates on two more. Expect rough edges, and
-> keep your backups.
+> keep your backups. The Echo 2nd gen and the Echo Dot 3rd gen are supported too, each tested on
+> one unit so far; see [Echo 2nd gen](#echo-2nd-gen) and [Echo Dot 3rd gen](#echo-dot-3rd-gen). The
+> Echo Input is **experimental and not yet tried on a unit**; see [Echo Input](#echo-input).
 
 ## What happened to the Dot
 
@@ -82,23 +94,27 @@ Echo Show 5. Both run the same daemon source, built per device.
 | Voice assistant | Alexa, in Amazon's cloud | Home Assistant Assist ✅. Wake word on the device (microWakeWord: "Okay Nabu", "Hey Jarvis", "Hey Mycroft", "Alexa", and eight from the community collection — "Computer", "Jarvis", "Hey Friday", "GLaDOS", "HAL", "Terminator", "Marvin", "Home Assistant") ✅. Speech-to-text and replies come from whatever your Home Assistant pipeline uses |
 | Where your voice goes | Amazon | Your Home Assistant, over its encrypted native API ✅ |
 | Microphones | 7-mic array, Amazon's processing | All 7 averaged, with echo cancellation on the average ✅ |
-| Talking over music | Alexa ducks on wake | Ducks on wake, and also for a few seconds after a *near miss*, so the second try is heard ✅ |
+| Talking over music | Alexa ducks on wake | Ducks on wake, and also for a few seconds after a *near miss*, so the second try is heard ✅. With echo cancellation on, the microphones stay open while the wake sound plays, so you can speak right after the wake word |
 | Speaker | Yes | Yes, a Home Assistant media player ✅ |
-| Light ring | Alexa's colors | Wake, listening, thinking, replying and error effects, set from Home Assistant ✅ |
+| Light ring | Alexa's colors | Wake, listening, thinking, replying and error effects, set from Home Assistant ✅. Choose **Follows the Music** in **Ring follows the room** and, while music plays, the ring moves with its level, bass, middle and treble and swells on the beat. The ring is a configuration entity, so Assist doesn't turn it on with the room's lights |
+| Voice and call volume | One volume | **Voice volume** (replies and announcements) and **Call volume** (intercom calls) can each sit a few steps above or below the music volume. **Clearer speech** takes the bass down while replies play, off by default. Replies can play on another Home Assistant media player, with the Dot as the fallback. [Details](https://github.com/HuskerMinion/techo5/blob/main/docs/setup.md#voice-volume-and-call-volume) |
+| Sounds of your own | No | The volume, button, Bluetooth, listening-ended and Drop In sounds can be your own recordings, one at a time or as a sound pack, on the setup page. [Details](https://github.com/HuskerMinion/techo5/blob/main/docs/setup.md#sounds-of-your-own) |
+| Baby monitor | No | A private link plays the room's sound live in a phone's browser. Off until you turn it on; the light ring pulses amber while someone listens, and the mute button stops it. [Details](https://github.com/HuskerMinion/techo5/blob/main/docs/setup.md#the-baby-monitor) |
+| Recent voice requests, live log | No | The last 10 voice requests and the Dot's log as it's written, on the setup page. [Details](https://github.com/HuskerMinion/techo5/blob/main/docs/setup.md#recent-voice-requests) |
 | Buttons (action, volume, mic mute) | Yes | Yes, all four ✅. Mute is the hardware mute line |
 | Timers | Yes | Yes (Home Assistant timers) |
-| 3.5 mm audio out | Yes | In the daemon (jack detection, headphone path), with an **Audio output** choice on the setup page and in Home Assistant. Not yet tested on this image |
+| 3.5 mm audio out | Yes | In the daemon (jack detection, headphone path), with an **Audio output** choice on the setup page and in Home Assistant |
 | Bluetooth: phone to Dot (Dot as a speaker) | Yes | Yes ✅. Hold the action button for 5 seconds (the ring pulses blue), or turn on **Bluetooth pairing** in Home Assistant, or say "pair Bluetooth" with [this automation](docs/bluetooth-pairing-automation.yaml). Then pick the Dot on your phone; a chime says it worked. Phone volume works, the wake word still works over the music, and whichever started last plays: phone or Home Assistant media |
 | Bluetooth: Dot to a speaker or headphones | Yes | Yes ✅. If no phone pairs within 20 s, pairing mode connects the strongest speaker it hears, since there's no screen to choose on |
-| Home Assistant Bluetooth proxy | No | Yes ✅, alongside Bluetooth audio |
-| Multi-room music | Alexa groups | Sendspin (Music Assistant) client on port 8928. Built in, not yet tested on this image |
-| AirPlay and Spotify Connect | Spotify Connect | Both, new and **not yet tested**: off until turned on, on the setup page (Sound & Voice) or in Home Assistant. The Dot shows up under its own name in the Apple and Spotify apps (Spotify Premium) |
+| Home Assistant Bluetooth proxy | No | Yes ✅, alongside Bluetooth audio. It keeps scanning after Secure Connections restarts the radio |
+| Multi-room music | Alexa groups | Sendspin (Music Assistant) client on port 8928. Built in |
+| AirPlay and Spotify Connect | Spotify Connect | Both: off until turned on, on the setup page (Sound & Voice) or in Home Assistant. The Dot shows up under its own name in the Apple and Spotify apps (Spotify Premium), and an iPhone can group it with other AirPlay 2 speakers |
 | Calling | Alexa calling and Drop In | Yes ✅, through your own SIP provider (TLS and SRTP): "call Alex" by voice, a help call that alerts phones and dials people in turn, calls between your own devices. The action button answers and hangs up, and the ring pulses green. Off until Home Assistant signs the Dot in. See [TECHO5's phone.md](https://github.com/HuskerMinion/techo5/blob/main/docs/phone.md) |
 | Skills, shopping | Yes | **No.** Those are Alexa cloud services |
 | Routines and smart home control | Alexa | Whatever Home Assistant does ✅ |
 | Updates | Amazon, automatic | Signed releases from this repo, offered in Home Assistant, A/B slots with automatic rollback ✅ |
 | Remote access | None | SSH, keys only, behind a Home Assistant switch that starts off ✅ |
-| Network exposure | Amazon's | Firewall: inbound only the Home Assistant API, mDNS, SSH, Sendspin and the setup page, and on Wi-Fi AirPlay and Spotify Connect (nothing listens there unless they are on) ✅ |
+| Network exposure | Amazon's | Firewall: inbound only the Home Assistant API, mDNS, SSH, Sendspin, the setup page, DLNA discovery (SSDP), DHCP replies and ping, and on Wi-Fi AirPlay and Spotify Connect (nothing listens there unless they are on) ✅ |
 | Changing Wi-Fi | Alexa app | `wifi-set` on the Dot, or `tools/set-wifi.py` from a computer over USB ✅ |
 | If it won't boot | Factory reset | Rescue mode (USB console, SSH, firewall) after five bad boots. Fire OS and TWRP are still on the device, one command away ✅ |
 
@@ -128,8 +144,11 @@ now Bluetooth comes up in the background and a paired speaker reconnects when it
   sitting in TWRP or running Fire OS with root adb (for example with
   [EchoLocal](https://github.com/ygelfand/echolocal) installed). Unlocking isn't part of this project;
   [Getting started](https://github.com/HuskerMinion/techo5/blob/main/docs/getting-started.md#echo-dot-2nd-gen)
-  has every command.
-- The Dot joined to Wi-Fi once in Fire OS. If it hasn't been, the installer asks for a network.
+  has every command. For an Echo 2nd gen, see [Echo 2nd gen](#echo-2nd-gen): it's unlocked the same
+  way, over wires soldered inside. For an Echo Dot 3rd gen, unlocked with kamakiri-donut, see
+  [Echo Dot 3rd gen](#echo-dot-3rd-gen) for what differs.
+- Two files for the unlock, both linked from the amonet-biscuit XDA thread (see Getting started): the amonet-biscuit release ZIP (it holds `boot-root.zip`) and the Fire OS update file `update-kindle-biscuit_puffin-NS6574_user_7623_0013121734532.bin`. The installer downloads everything else.
+- The Dot joined to Wi-Fi once in Fire OS (optional). If it hasn't been, or you pass `--wifi "<network name>"`, the installer asks for the passphrase.
 - A Windows, Linux or macOS computer with Python 3, adb and git
   ([setup for each](https://github.com/HuskerMinion/techo5/blob/main/docs/getting-started.md#set-up-your-computer-once)),
   plus Home Assistant. Nothing is compiled.
@@ -151,6 +170,16 @@ It finds the Dot on its own (asking which, if several are plugged in) and asks w
 Assistant when it has no name yet. From a script, pass `--serial <adb serial> --name "Kitchen"` and it
 asks nothing.
 
+### Giving it to someone else
+
+Add `--for-someone-else` to install a Dot that is going to another person:
+
+```
+python3 tools/install-dot.py --for-someone-else
+```
+
+It asks for no Wi-Fi network, name or key, and writes none. It also clears any name, key and saved network an earlier install left, so the new owner starts fresh. The Dot starts its own setup the next time it is powered on: 45 seconds after it starts, its ring pulses teal and it offers Improv over Bluetooth. The new owner presses any of its buttons, gives it their Wi-Fi from Home Assistant or [improv-wifi.com](https://www.improv-wifi.com), and their Home Assistant can then add it with nothing typed. Its first start also clears anything an earlier owner left. Everything else (backups, image, first boot) is the same. It cannot be used with `--name`, `--wifi`, `--wifi-passphrase-file`, `--key-file` or `--ssh-key`.
+
 The installer:
 1. Backs up every boot-critical partition to `backups/<serial>/` and checks each copy against the
    device. On TWRP it reads the real bootloader partitions, not amonet's decoys.
@@ -160,8 +189,8 @@ The installer:
    checksums it carries. `--release dot-v0.6.0` picks a version instead of the newest — releases here
    are tagged `dot-vX.Y.Z`, so the tag is what goes in, not the bare version; `--rootfs` and `--kernel`
    take your own builds ([docs/building.md](docs/building.md)).
-3. Builds this unit's boot image from **its own** recovery backup, with the Bluetooth kernel
-   (`--no-bluetooth-kernel` keeps the unit's own, without Bluetooth). No Amazon binary is ever
+3. Builds this unit's boot image from **its own** recovery backup, with the Bluetooth kernel for its
+   board (`--no-bluetooth-kernel` keeps the unit's own, without Bluetooth). No Amazon binary is ever
    downloaded or published.
 4. Writes the image to recovery, and the root filesystem into slot a.
 5. Keeps an existing Home Assistant name and key, or asks for a name and makes a key.
@@ -174,12 +203,170 @@ root filesystem only; a Dot installed before the Bluetooth kernel gets it with
 `python3 tools/update-boot.py --serial <serial> --address <address>` (SSH switched on in Home Assistant).
 On Windows, type `python` for `python3`.
 
+### Echo 2nd gen
+
+<img src="images/radar.png" alt="RADAR" width="90" align="right">
+
+The Echo 2nd gen (2017, model XC56PY, `radar`) has the Dot's SoC and boot chain, so it uses the same release and the
+same installer. The installer and the daemon tell the two apart. Supported, tested on one unit so far.
+Details are in [docs/hardware-radar.md](docs/hardware-radar.md).
+
+Tested on that unit: the speaker (with the unit's own EQ), the headphone jack (mono), voice with Home
+Assistant, Bluetooth (a phone plays to it), Wi-Fi, all seven microphones, the buttons, the light ring
+and the light sensor. Not yet: the vendor's own sound tuning files aren't used. It plays without them.
+
+It can also run [LibreEcho](https://github.com/aslater3/LibreEcho-Linux)'s Linux 6.1 kernel instead of
+the 3.18 one, opt-in: `--linux-61` on the installer or on `update-boot.py`, and `--linux-318` goes back.
+Bluetooth and the headphone jack aren't tested on 6.1 yet. See
+[docs/hardware-radar.md](docs/hardware-radar.md#linux-61-optional).
+
+**USB is inside.** There's no USB port on the case, only D+, D- and GND pads on the amplifier board
+inside, marked TP15 (D+), TP14 (D-) and TP13 (GND).
+1. Open the case. [LibreEcho](https://github.com/aslater3/LibreEcho)'s disassembly guide shows the
+   way in.
+2. Solder short wires from a USB cable to D+, D- and GND. Leave its red (5 V) wire unconnected: the
+   Echo runs from its own barrel-jack supply. A 3D-printed pogo-pin dock was tried and dropped out once
+   TWRP started. Soldered wires were steady.
+
+Once it's installed you rarely need USB (updates, SSH and Home Assistant all go over Wi-Fi), so the
+wires can come off afterward. Note which pad is which first.
+
+**Unlock** with amonet-radar v1.0.0 ([R0rt1z2's amonet, branch
+`mt8163-radar`](https://github.com/R0rt1z2/amonet/tree/mt8163-radar), release zip `amonet-radar-v1.0.0.zip`):
+1. Hold the action button (the dot) while you plug in the power. The ring turns blue, then white:
+   that's stock fastboot.
+2. Run `fastbrick.ps1` on Windows, or `fastbrick.sh`. It prints `Exploit most likely successful!`.
+   If the script never sees the unit, check the wires and try again. With a flaky pogo dock, Windows
+   reported "Port Reset Failed" and "Device Descriptor Request Failed".
+3. If the ring then stays green for minutes, unplug the power, hold **+** (volume up) and plug it back
+   in. A white ring is amonet's TWRP.
+
+Stock fastboot and TWRP both show white, so go by the step you're on, not only the color. Volume down
+at power-on gives amonet's fastboot (a rainbow ring). It doesn't support `fastboot boot`, and
+`fastboot reboot` from it returns to Fire OS. Until TECHO5 is installed, holding **+** at power-on gets you back to TWRP.
+Afterward TECHO5 sits in the recovery partition where TWRP was: `to-twrp` puts TWRP back (Getting
+started, "Going back to TWRP or Fire OS").
+
+**Back up.** The installer backs up every boot partition itself and checks each copy by md5. A full
+copy of the eMMC from TWRP is worth having too: the whole disk is about 3.9 GB and took about 30
+minutes over the soldered wires.
+
+**Install** from TWRP:
+
+```
+python3 tools/install-dot.py --wifi "<network name>"
+```
+
+It asks for the Wi-Fi passphrase and a name for Home Assistant. `--ssh-key <file.pub>` adds your SSH
+key. From dot-v1.0.19 on, the release carries the Echo 2nd gen's own Bluetooth kernel and the installer
+takes it. With an older release the unit keeps its own kernel, without Bluetooth.
+
+On Windows, a PC that has seen other Amazon devices may bind the TECHO5 USB console (`18d1:4ee7`) to
+Google's ADB driver instead of a COM port. The install still finished, because Wi-Fi came up. To get
+the console, pick **USB Serial Device** for it in Device Manager.
+
+### Echo Dot 3rd gen
+
+<img src="images/donut.png" alt="DONUT" width="90" align="right">
+
+The Echo Dot 3rd gen (2018, model D9N29T, `donut`) is a different machine from the Dot 2: a MediaTek
+MT8516, four microphones, and Wi-Fi and Bluetooth on an MT7668. It uses the same release, installer and
+update channel, with its own build of the daemon and its own root filesystem. Supported, tested on one
+unit so far. Details are in [docs/hardware-donut.md](docs/hardware-donut.md). The 2019 refresh and the
+model with a clock are other boards and aren't supported.
+
+Tested on that unit: voice with Home Assistant, all four microphones, the speaker, the headphone jack,
+the buttons, mute and its light, the light ring, Wi-Fi, Bluetooth (a phone plays to it), the Bluetooth
+proxy, and an update to dot-v1.0.31 from Home Assistant. Not yet tried on a Dot 3: `update-boot.py`,
+the rescue after five failed boots, and installing on a unit with no saved Wi-Fi network.
+
+It differs from the Dot 2 in a few places:
+- **It keeps its own kernel.** The image carries the unit's stock kernel, which loads Amazon's Wi-Fi
+  and Bluetooth drivers from the unit's own system partition. The Bluetooth stack that kernel lacks
+  ships as modules built from source, and each release carries their complete source.
+- **Linux goes in `swdl`.** There's no recovery partition: the unlock boots `swdl` as recovery,
+  where the kit put TWRP. The installer keeps TWRP's copy in the store, so `to-twrp` works as on
+  the Dot 2.
+- **Our own wpa_supplicant.** Alpine's 2.11 can't finish a Wi-Fi handshake with this driver; ours
+  carries a one-line fix (see the hardware notes).
+
+**USB is under the base.** There's no USB port on the case. D− and D+ are on test pads TM4 and TM5,
+ground on TM1. Solder short wires from a USB cable: white (D−) to TM4, green (D+) to TM5, black to TM1.
+Leave the red (5 V) wire unconnected; the Dot runs from its own adapter. Once it's installed you rarely
+need USB, since updates, SSH and Home Assistant all go over Wi-Fi.
+
+**Unlock** with the kamakiri-donut v1.0.0 kit from
+[its XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-dot-3rd-gen-2018-donut.4801400/):
+hold the action (dot) button while you plug in the power to reach the bootrom, and start kamakiri with
+the Dot powered off. The kit leaves TWRP in `swdl` and stock Fire OS in both slots. Then flash its
+`boot-root.zip` for root adb.
+
+**Install** from Fire OS with root adb, or from TWRP:
+
+```
+python3 tools/install-dot.py
+```
+
+It backs up every boot partition, including `swdl` with TWRP in it, builds the image on the unit's own
+kernel, and puts the root filesystem on userdata. On Windows the TECHO5 console shows up as a USB serial
+device (`1d6b:0104`).
+
+### Echo Input
+
+The Echo Input (2018, model C1125P, `cupcake`) is the Echo Dot 3rd gen's board without a speaker: the
+same MediaTek MT8516, kernel, partitions, four microphones and MT7668 Wi-Fi and Bluetooth, with a
+3.5 mm line out for a speaker of your own, one RGB LED in place of the ring, and only the action and
+mute buttons. So it runs the Echo Dot 3rd gen's release as it is: the same installer, root filesystem,
+daemon build and update channel. The installer and the daemon tell the two apart by the device type id
+in idme. Details are in [docs/hardware-cupcake.md](docs/hardware-cupcake.md).
+
+> **Experimental: not yet tried on a unit.** This port was worked out from the Echo Dot 3rd gen's,
+> from [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist)'s notes on the Echo Input's
+> firmware (Gamer92000, MIT), where it runs on Fire OS, and from the Echo Input's GPL kernel source that
+> the Dot 3's Bluetooth modules are already built from. Keep the installer's backups, and please open an
+> issue with what worked and what didn't.
+
+What differs from the Dot 3, in short:
+- **Sound comes from the line out** (or a Bluetooth speaker). There's no speaker, so there's no Audio
+  output choice and no Speaker gain: the volume is the line out's.
+- **One LED.** It shows the ring's states in one color (each color channel at its brightest
+  segment), so what spins or chases on a ring holds still here.
+- **No volume keys.** Use Home Assistant, the setup page or the phone's volume over Bluetooth. The
+  volume up and down events aren't offered in Home Assistant, and the hold-two-buttons factory reset
+  isn't there either.
+- **Power and USB share the micro-USB socket.** No opening the case, no soldering. Until the install
+  is done the computer's port powers it; if it restarts or drops off USB, put a powered USB hub in
+  between.
+
+**Unlock** with the kamakiri-cupcake kit, **by hand, as
+[its XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-input-2018-cupcake.4797603/)
+says**, and stop once TWRP is running in `swdl` with stock Fire OS in both system slots. Don't let the
+Echo Input go online with the Alexa app on the way: it would update itself.
+
+**Install** from TWRP (or from Fire OS with root adb):
+
+```
+python3 tools/install-dot.py --dry-run
+python3 tools/install-dot.py
+```
+
+As on the Dot 3 it backs up every boot partition (`swdl` with TWRP in it too), builds the image on the
+unit's own kernel and puts the root filesystem on userdata. Before it writes anything it checks that
+`misc`, `swdl`, the system slots and userdata are where the Dot 3's boot scripts look for them, and
+stops if they aren't. The console shows up as "Echo Input Linux" (`1d6b:0104`).
+
 ## Where things are
 
 - [docs/porting-plan.md](docs/porting-plan.md): how it was built, milestone by milestone, and what
   each step proved.
 - [docs/hardware.md](docs/hardware.md): the board, partitions, kernels, and the Bluetooth kernel's
   security backports.
+- [docs/hardware-radar.md](docs/hardware-radar.md): the Echo 2nd gen: its board, audio, kernel,
+  unlock and USB.
+- [docs/hardware-donut.md](docs/hardware-donut.md): the Echo Dot 3rd gen: its board, partitions,
+  boot image, Wi-Fi, audio and Bluetooth modules.
+- [docs/hardware-cupcake.md](docs/hardware-cupcake.md): the Echo Input: what it shares with the Echo
+  Dot 3rd gen, what differs, and what is still to be checked on a unit.
 - [docs/microphones.md](docs/microphones.md): the array measurements, echo cancellation, and the
   LED whine that turned out to be Fire OS's.
 - `tools/`: the installer, the Wi-Fi tool, the boot image updater, and `tools/linux/` (initramfs,
@@ -188,17 +375,36 @@ On Windows, type `python` for `python3`.
 - [docs/building.md](docs/building.md): building the kernel, bluez-alsa, the daemon and the root
   filesystem yourself.
 - The daemon's source: [TECHO5](https://github.com/HuskerMinion/techo5), branch `main`, built with
-  `-tags dot`.
+  `-tags dot` (`-tags dot,donut` for the Echo Dot 3rd gen and the Echo Input).
 
 ## Credits
 
 See [NOTICE](NOTICE) for the full list.
+- The badges: BISCUIT is a homemade Southern buttermilk biscuit with sorghum syrup, photo by
+  Georgiabrown24, [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Homemade_Southern_Buttermilk_Biscuit_with_Sorghum_Syrup.jpg),
+  [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) (the cropped badge is CC BY-SA 4.0
+  too). RADAR is the 30-foot dish of NSSL's first research Doppler weather radar, NOAA Photo Library,
+  OAR/ERL/National Severe Storms Laboratory, public domain,
+  [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Nssl0026_-_Flickr_-_NOAA_Photo_Library.jpg).
+  DONUT is a chocolate-glazed doughnut with sprinkles, photo by Kiran Foster,
+  [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Chocolate-glazed_doughnut_with_sprinkles_(7429937320).jpg),
+  [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
 - [EchoLocal](https://github.com/ygelfand/echolocal) (MIT, Yuri Gelfand): the Echo Dot 2 daemon this
   project is built on (see above).
 - [EchoMuse / emOS](https://github.com/wilbowes/EchoMuse) (MIT, Wil Bowes): the first Linux
   userspace on this hardware. Its notes on the USB gadget, Wi-Fi patch download and the mic array
   saved days.
-- amonet and kaeru ([R0rt1z2](https://github.com/R0rt1z2)): the unlock.
+- amonet and kaeru ([R0rt1z2](https://github.com/R0rt1z2)): the unlock. The Echo Dot 3rd gen's
+  kamakiri-donut kit and its
+  [XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-dot-3rd-gen-2018-donut.4801400/).
+- [echo-dot-assist](https://github.com/Gamer92000/echo-dot-assist) (MIT, Gamer92000): the Echo
+  Input's firmware worked out (its microphones, LED, buttons, line out and Wi-Fi driver), which the
+  Echo Input port here is built on, and the Dot 3's speaker findings before it. The Echo Input's
+  kamakiri-cupcake kit and its
+  [XDA thread](https://xdaforums.com/t/unlock-root-twrp-unbrick-amazon-echo-input-2018-cupcake.4797603/)
+  are [R0rt1z2](https://github.com/R0rt1z2)'s.
+- [Pallav Aggarwal's teardown](https://pallavaggarwal.in/2023/01/10/teardown-amazon-echo-dot-3rd-gen/)
+  of the Echo Dot 3rd gen.
 - [@proffalken](https://github.com/proffalken): the
   [step-by-step install from Linux](https://gist.github.com/proffalken/377ae50146affe1886dddaaacb87926b)
   (the exact Fire OS build, trusting the adb key, byte-safe backups, the Linux serial console lookup)
@@ -210,8 +416,13 @@ See [NOTICE](NOTICE) for the full list.
 - The Linux kernel's Bluetooth developers: every backported fix is listed with its commit.
 - [TECHO5](https://github.com/HuskerMinion/techo5): the daemon, the Linux image tooling and the
   root filesystem slot design this project shares.
-- Amazon's GPL kernel source release for the Echo Dot (2nd generation): the kernel the Dot's
-  Bluetooth build starts from.
+- Amazon's GPL kernel source releases for the Echo Dot (2nd generation), Echo_Dot_src-6.5.7.1-20251024,
+  and the Echo (2nd generation), Echo_v2_src-6.5.7.1-20251024: the kernels the Bluetooth builds
+  start from. For the Echo Dot 3rd gen's Bluetooth modules, the Echo Input's
+  (Echo_Input_src-6.5.4.7-20210719, as imported in
+  [bengris32/android_kernel_amazon_cupcake](https://github.com/bengris32/android_kernel_amazon_cupcake)).
+- [wpa_supplicant](https://w1.fi/wpa_supplicant/) (Jouni Malinen and contributors, BSD): Wi-Fi on
+  the Echo Dot 3rd gen, rebuilt with one change.
 - [Alpine Linux](https://alpinelinux.org/), [BlueZ](https://www.bluez.org/) and BusyBox: the system
   underneath.
 - [microWakeWord](https://github.com/kahrendt/microWakeWord) (Kevin Ahrendt) and the
@@ -225,6 +436,6 @@ See [NOTICE](NOTICE) for the full list.
 
 MIT for this project. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The kernel patches in
 `tools/linux/kernel-patches` and the bluez-alsa patch keep their upstream licenses (GPL-2.0 and
-MIT).
+MIT), and so do the Echo Dot 3rd gen's wpa_supplicant patch (BSD) and Bluetooth modules (GPL-2.0).
 
 TECHO5 Dot isn't affiliated with Amazon. Echo and Alexa are trademarks of Amazon.com, Inc.

@@ -108,12 +108,13 @@ Echo Show 5. Both run the same daemon source, built per device.
 | Bluetooth: Dot to a speaker or headphones | Yes | Yes ✅. If no phone pairs within 20 s, pairing mode connects the strongest speaker it hears, since there's no screen to choose on |
 | Home Assistant Bluetooth proxy | No | Yes ✅, alongside Bluetooth audio. It keeps scanning after Secure Connections restarts the radio |
 | Multi-room music | Alexa groups | Sendspin (Music Assistant) client on port 8928. Built in |
-| AirPlay and Spotify Connect | Spotify Connect | Both: off until turned on, on the setup page (Sound & Voice) or in Home Assistant. The Dot shows up under its own name in the Apple and Spotify apps (Spotify Premium), and an iPhone can group it with other AirPlay 2 speakers |
+| AirPlay and Spotify Connect | Spotify Connect | Both: off until turned on, on the setup page (Sound) or in Home Assistant. The Dot shows up under its own name in the Apple and Spotify apps (Spotify Premium), and an iPhone can group it with other AirPlay 2 speakers |
 | Calling | Alexa calling and Drop In | Yes ✅, through your own SIP provider (TLS and SRTP): "call Alex" by voice, a help call that alerts phones and dials people in turn, calls between your own devices. The action button answers and hangs up, and the ring pulses green. Off until Home Assistant signs the Dot in. See [TECHO5's phone.md](https://github.com/HuskerMinion/techo5/blob/main/docs/phone.md) |
 | Skills, shopping | Yes | **No.** Those are Alexa cloud services |
 | Routines and smart home control | Alexa | Whatever Home Assistant does ✅ |
 | Updates | Amazon, automatic | Signed releases from this repo, offered in Home Assistant, A/B slots with automatic rollback ✅ |
 | Remote access | None | SSH, keys only, behind a Home Assistant switch that starts off ✅ |
+| Something of your own at boot | No | An executable `/data/techo5-linux/rc.local` starts at the end of every boot, in the background, with its output in `rc.local.log`. Nothing runs unless you put it there. [Details](https://github.com/HuskerMinion/techo5/blob/main/docs/setup.md#running-something-of-your-own-at-boot) |
 | Network exposure | Amazon's | Firewall: inbound only the Home Assistant API, mDNS, SSH, Sendspin, the setup page, DLNA discovery (SSDP), DHCP replies and ping, and on Wi-Fi AirPlay and Spotify Connect (nothing listens there unless they are on) ✅ |
 | Changing Wi-Fi | Alexa app | `wifi-set` on the Dot, or `tools/set-wifi.py` from a computer over USB ✅ |
 | If it won't boot | Factory reset | Rescue mode (USB console, SSH, firewall) after five bad boots. Fire OS and TWRP are still on the device, one command away ✅ |
@@ -158,6 +159,9 @@ now Bluetooth comes up in the background and a paired speaker reconnects when it
 Starting from a stock Dot? [Getting started](https://github.com/HuskerMinion/techo5/blob/main/docs/getting-started.md)
 walks through it in order: updating Fire OS, the amonet unlock (linked), this installer, and Home
 Assistant.
+
+In German: [chr-braun's guide for the Echo Dot 2](https://github.com/chr-braun/techo5-dot-de), a
+community guide kept by its author. Where it and the English docs differ, the English docs are right.
 
 ```
 git clone https://github.com/HuskerMinion/techo5-dot
